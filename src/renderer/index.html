@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QRTransfer</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --border: #334155;
+        --text: #f8fafc;
+        --muted: #94a3b8;
+        --primary: #3b82f6;
+        --primary-hover: #2563eb;
+        --success: #22c55e;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: var(--bg); color: var(--text);
+        min-height: 100vh; display: flex; flex-direction: column;
+        align-items: center; padding: 2rem 1rem;
+      }
+      header { text-align: center; margin-bottom: 2rem; }
+      .app-logo { width: 64px; height: 64px; border-radius: 16px; display: block; margin: 0 auto 0.75rem; }
+      header h1 { font-size: 1.8rem; font-weight: 700; }
+      header p { color: var(--muted); margin-top: 0.25rem; }
+      .card {
+        background: var(--card-bg); border: 1px solid var(--border);
+        border-radius: 14px; padding: 1.5rem; width: 100%; max-width: 480px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      }
+      .card + .card { margin-top: 1rem; }
+      .btn {
+        display: block; width: 100%; padding: 0.75rem 1rem;
+        background: var(--primary); color: #fff; border: none;
+        border-radius: 8px; font-size: 0.95rem; cursor: pointer;
+        transition: background 0.2s;
+      }
+      .btn:hover { background: var(--primary-hover); }
+      .btn:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
+      .btn-danger { background: var(--danger); }
+      .btn-danger:hover { background: #dc2626; }
+      .btn-sm {
+        display: inline-block; width: auto; padding: 0.4rem 0.8rem;
+        font-size: 0.8rem; margin-left: 0.5rem; border-radius: 6px;
+      }
+
+      /* QR section */
+      #qr-section { text-align: center; }
+      #qr-img { width: 220px; height: 220px; border-radius: 10px; border: 3px solid var(--border); background: #fff; display: none; }
+      #qr-placeholder {
+        width: 220px; height: 220px; border-radius: 10px;
+        border: 2px dashed var(--border); display: flex;
+        align-items: center; justify-content: center;
+        color: var(--muted); font-size: 0.85rem; margin: 0 auto 1rem;
+      }
+      #connect-url { font-size: 0.7rem; color: var(--muted); word-break: break-all; margin-top: 0.5rem; }
+      #session-status {
+        font-size: 0.85rem; margin: 0.75rem 0; padding: 0.5rem;
+        border-radius: 6px; background: #0f172a; text-align: center;
+      }
+      #session-status.active { color: var(--success); }
+      #session-status.pending { color: var(--warning); }
+      #session-status.idle { color: var(--muted); }
+      #session-status.error { color: var(--danger); }
+
+      /* Pairing dialog */
+      #pairing-dialog { display: none; border: 1px solid var(--warning); border-radius: 10px; background: #1c1a0f; padding: 1rem; margin-top: 1rem; }
+      #pairing-dialog h3 { color: var(--warning); margin-bottom: 0.5rem; }
+      #pairing-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
+      .pair-btns { display: flex; gap: 0.5rem; }
+      .pair-btns .btn { flex: 1; padding: 0.6rem; }
+
+      /* Network selector */
+      #iface-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+      #iface-select { flex: 1; background: #0f172a; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.5rem; font-size: 0.85rem; }
+      #mode-select { width: 100%; background: #0f172a; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem; }
+
+      /* File list */
+      #files-section { display: none; }
+      .file-entry { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+      .file-entry:last-child { border-bottom: none; }
+      .file-entry .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+      .file-entry .fsize { color: var(--muted); font-size: 0.75rem; margin-top: 0.2rem; }
+
+      #download-dir-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+      #dl-dir-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <select id="language-select" aria-label="Language" style="float:right;background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:6px;padding:0.35rem 0.5rem;">
+        <option value="en">English</option>
+        <option value="tr">Türkçe</option>
+      </select>
+      <img class="app-logo" src="/app-logo.png" alt="QRTransfer logo" />
+      <h1>📲 QRTransfer</h1>
+      <p>Yerel ağda QR kodla dosya aktarımı</p>
+    </header>
+
+    <!-- Session card -->
+    <div class="card">
+      <select id="mode-select" title="Bağlantı modunu seçin">
+        <option value="local">Aynı ağ (yerel Wi-Fi)</option>
+        <option value="remote">Farklı ağ (geçici HTTPS tüneli)</option>
+      </select>
+      <div id="iface-row">
+        <select id="iface-select" title="Ağ arayüzü seçin"></select>
+      </div>
+      <div id="qr-section">
+        <div id="qr-placeholder">QR kod burada görünecek</div>
+        <img id="qr-img" alt="QR Kodu" />
+        <div id="connect-url"></div>
+      </div>
+      <div id="wifi-hint" style="display:none; font-size: 0.78rem; color: #94a3b8; text-align: center; margin-top: 0.6rem; background: rgba(59, 130, 246, 0.1); padding: 0.5rem; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.25);">
+        📶 <strong>Aynı Ağ Gereklidir:</strong> Telefonunuz bilgisayarla aynı Wi-Fi ağına bağlı olmalıdır (mobil veriyle ulaşılamaz).
+      </div>
+      <div id="remote-hint" style="display:none; font-size: 0.78rem; color: #94a3b8; text-align: center; margin-top: 0.6rem; background: rgba(34, 197, 94, 0.1); padding: 0.5rem; border-radius: 6px; border: 1px solid rgba(34, 197, 94, 0.25);">
+        🌐 Farklı ağdan erişim için geçici HTTPS tüneli kullanılır. Bağlantı URL'sini yalnızca güvendiğiniz kişiyle paylaşın.
+      </div>
+      <div id="session-status" class="idle">Oturum bekleniyor</div>
+
+      <!-- Pairing approval -->
+      <div id="pairing-dialog">
+        <h3>🔔 Cihaz bağlanmak istiyor</h3>
+        <div id="pairing-info"></div>
+        <div class="pair-btns">
+          <button class="btn" id="approve-btn">✓ İzin Ver</button>
+          <button class="btn btn-danger" id="deny-btn">✗ Reddet</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+        <button class="btn" id="start-btn">Yeni Oturum Başlat</button>
+        <button class="btn btn-danger" id="stop-btn" disabled style="width:auto;padding:0.75rem 1rem;">Kapat</button>
+      </div>
+    </div>
+
+    <!-- Download dir card -->
+    <div class="card">
+      <div id="download-dir-row">
+        <span>📁 İndirme klasörü:</span>
+        <span id="dl-dir-path">—</span>
+        <button class="btn btn-sm" id="choose-dir-btn">Değiştir</button>
+      </div>
+    </div>
+
+    <!-- Received files -->
+    <div class="card" id="files-section">
+      <h3 style="margin-bottom:0.75rem;font-size:1rem;">Alınan Dosyalar</h3>
+      <div id="file-list"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:0.75rem;font-size:1rem;">Telefona Gönder</h3>
+      <button class="btn" id="choose-outgoing-btn" disabled>Dosya Seç</button>
+      <div id="outgoing-list" style="margin-top:0.5rem;font-size:0.8rem;color:var(--muted);"></div>
+    </div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
